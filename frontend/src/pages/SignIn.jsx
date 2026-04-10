@@ -22,6 +22,8 @@ function SignIn() {
     const [password,setPassword]=useState("")
     const [err,setErr]=useState("")
     const [loading,setLoading]=useState(false)
+    const [mobile,setMobile]=useState("")
+    const [showMobile,setShowMobile]=useState(false)
     const dispatch=useDispatch()
      const handleSignIn=async () => {
         setLoading(true)
@@ -43,6 +45,8 @@ function SignIn() {
        try {
          const {data}=await axios.post(`${serverUrl}/api/auth/google-auth`,{
              email:result.user.email,
+             fullName:result.user.displayName,
+             mobile:mobile||undefined,
          },{withCredentials:true})
          dispatch(setUserData(data))
        } catch (error) {
@@ -54,7 +58,7 @@ function SignIn() {
             <div className={`bg-white rounded-xl shadow-lg w-full max-w-md p-8 border-[1px] `} style={{
                 border: `1px solid ${borderColor}`
             }}>
-                <h1 className={`text-3xl font-bold mb-2 `} style={{ color: primaryColor }}>Vingo</h1>
+                <h1 className={`text-3xl font-bold mb-2 `} style={{ color: primaryColor }}>HomeChef</h1>
                 <p className='text-gray-600 mb-8'> Sign In to your account to get started with delicious food deliveries
                 </p>
 
@@ -85,9 +89,13 @@ function SignIn() {
             </button>
       {err && <p className='text-red-500 text-center my-[10px]'>*{err}</p>}
 
-            <button className='w-full mt-4 flex items-center justify-center gap-2 border rounded-lg px-4 py-2 transition cursor-pointer duration-200 border-gray-400 hover:bg-gray-100' onClick={handleGoogleAuth}>
+            {showMobile && <div className='mt-4 mb-2'>
+                <label className='block text-gray-700 font-medium mb-1'>Mobile (for new accounts)</label>
+                <input type="text" className='w-full border rounded-lg px-3 py-2 focus:outline-none' placeholder='Enter your Mobile Number' style={{ border: `1px solid ${borderColor}` }} onChange={(e)=>setMobile(e.target.value)} value={mobile}/>
+            </div>}
+            <button className='w-full mt-4 flex items-center justify-center gap-2 border rounded-lg px-4 py-2 transition cursor-pointer duration-200 border-gray-400 hover:bg-gray-100' onClick={()=>{ if(!showMobile){setShowMobile(true)}else{handleGoogleAuth()} }}>
 <FcGoogle size={20}/>
-<span>Sign In with Google</span>
+<span>{showMobile?"Continue with Google":"Sign In with Google"}</span>
             </button>
             <p className='text-center mt-6 cursor-pointer' onClick={()=>navigate("/signup")}>Want to create a new account ?  <span className='text-[#ff4d2d]'>Sign Up</span></p>
             </div>

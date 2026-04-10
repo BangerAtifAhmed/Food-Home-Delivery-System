@@ -42,6 +42,15 @@ export const getMyShop=async (req,res) => {
     }
 }
 
+export const deleteShop=async (req,res) => {
+    try {
+        await Shop.findOneAndDelete({owner:req.userId})
+        return res.status(200).json({message:"shop deleted successfully"})
+    } catch (error) {
+        return res.status(500).json({message:`delete shop error ${error}`})
+    }
+}
+
 export const getShopByCity=async (req,res) => {
     try {
         const {city}=req.params

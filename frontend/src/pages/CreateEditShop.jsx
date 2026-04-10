@@ -8,6 +8,7 @@ import { useRef } from 'react';
 import axios from 'axios';
 import { serverUrl } from '../App';
 import { setMyShopData } from '../redux/ownerSlice';
+import { setShopsInMyCity } from '../redux/userSlice';
 import { ClipLoader } from 'react-spinners';
 function CreateEditShop() {
     const navigate = useNavigate()
@@ -21,6 +22,16 @@ function CreateEditShop() {
        const [backendImage,setBackendImage]=useState(null)
        const [loading,setLoading]=useState(false)
        const dispatch=useDispatch()
+       const handleDelete=async ()=>{
+        try {
+            await axios.delete(`${serverUrl}/api/shop/delete`,{withCredentials:true})
+            dispatch(setMyShopData(null))
+            dispatch(setShopsInMyCity([]))
+            navigate("/")
+        } catch (error) {
+            console.log(error)
+        }
+       }
        const handleImage=(e)=>{
         const file=e.target.files[0]
         setBackendImage(file)
@@ -98,8 +109,10 @@ function CreateEditShop() {
                     </div>
                     <button className='w-full bg-[#ff4d2d] text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:bg-orange-600 hover:shadow-lg transition-all duration-200 cursor-pointer' disabled={loading}>
                         {loading?<ClipLoader size={20} color='white'/>:"Save"}
-                    
                     </button>
+                    {myShopData && <button type="button" className='w-full bg-red-600 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:bg-red-700 transition-all duration-200 cursor-pointer' onClick={handleDelete}>
+                        Delete Shop
+                    </button>}
                 </form>
             </div>
                 

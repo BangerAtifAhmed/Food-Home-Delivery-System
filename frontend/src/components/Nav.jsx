@@ -19,11 +19,14 @@ function Nav() {
     const dispatch = useDispatch()
     const navigate=useNavigate()
     const handleLogOut = async () => {
+        console.log("logout clicked")
         try {
-            const result = await axios.get(`${serverUrl}/api/auth/signout`, { withCredentials: true })
+            const res=await axios.get(`${serverUrl}/api/auth/signout`, { withCredentials: true })
+            console.log("signout res:",res.data)
             dispatch(setUserData(null))
+            navigate("/signin")
         } catch (error) {
-            console.log(error)
+            console.log("logout error:",error)
         }
     }
 
@@ -60,7 +63,7 @@ handleSearchItems()
 
 
 
-            <h1 className='text-3xl font-bold mb-2 text-[#ff4d2d]'>Vingo</h1>
+            <h1 className='text-3xl font-bold mb-2 text-[#ff4d2d]'>Homechef</h1>
             {userData.role == "user" && <div className='md:w-[60%] lg:w-[40%] h-[70px] bg-white shadow-xl rounded-lg items-center gap-[20px] hidden md:flex'>
                 <div className='flex items-center w-[30%] overflow-hidden gap-[10px] px-[10px] border-r-[2px] border-gray-400'>
                     <FaLocationDot size={25} className=" text-[#ff4d2d]" />
@@ -87,11 +90,11 @@ handleSearchItems()
                     <div className='hidden md:flex items-center gap-2 cursor-pointer relative px-3 py-1 rounded-lg bg-[#ff4d2d]/10 text-[#ff4d2d] font-medium' onClick={()=>navigate("/my-orders")}>
                       <TbReceipt2 size={20}/>
                       <span>My Orders</span>
-                      <span className='absolute -right-2 -top-2 text-xs font-bold text-white bg-[#ff4d2d] rounded-full px-[6px] py-[1px]'>0</span>
+                      
                     </div>
                      <div className='md:hidden flex items-center gap-2 cursor-pointer relative px-3 py-1 rounded-lg bg-[#ff4d2d]/10 text-[#ff4d2d] font-medium' onClick={()=>navigate("/my-orders")}>
                       <TbReceipt2 size={20}/>
-                      <span className='absolute -right-2 -top-2 text-xs font-bold text-white bg-[#ff4d2d] rounded-full px-[6px] py-[1px]'>0</span>
+                      
                     </div>
                 </>: (
                     <>

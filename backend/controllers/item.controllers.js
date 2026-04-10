@@ -27,6 +27,7 @@ export const addItem = async (req, res) => {
         return res.status(201).json(shop)
 
     } catch (error) {
+        console.log("add item error:", error.message)
         return res.status(500).json({ message: `add item error ${error}` })
     }
 }
@@ -131,7 +132,7 @@ export const searchItems=async (req,res) => {
     try {
         const {query,city}=req.query
         if(!query || !city){
-            return null
+            return res.status(200).json([])
         }
         const shops=await Shop.find({
             city:{$regex:new RegExp(`^${city}$`, "i")}
