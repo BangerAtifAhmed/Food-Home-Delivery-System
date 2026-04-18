@@ -4,18 +4,15 @@ import Shop from "../models/shop.model.js"
 import User from "../models/user.model.js"
 import { sendDeliveryOtpMail } from "../utils/mail.js"
 import RazorPay from "razorpay"
-import dotenv from "dotenv"
-import { count } from "console"
 
-dotenv.config()
-let instance = new RazorPay({
+const getInstance = () => new RazorPay({
     key_id: process.env.RAZORPAY_KEY_ID,
     key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+})
 
 export const placeOrder = async (req, res) => {
     try {
-        const { cartItems, paymentMethod, deliveryAddress, totalAmount } = req.body
+        const { cartItems, paymentMethod, deliveryAddress, totalAmount, tip = 0 } = req.body
         if (cartItems.length == 0 || !cartItems) {
             return res.status(400).json({ message: "cart is empty" })
         }
@@ -55,7 +52,7 @@ export const placeOrder = async (req, res) => {
         ))
 
         if (paymentMethod == "online") {
-            const razorOrder = await instance.orders.create({
+            const razorOrder = await getInstance().orders.create({
                 amount: Math.round(totalAmount * 100),
                 currency: 'INR',
                 receipt: `receipt_${Date.now()}`
@@ -65,6 +62,7 @@ export const placeOrder = async (req, res) => {
                 paymentMethod,
                 deliveryAddress,
                 totalAmount,
+                tip,
                 shopOrders,
                 razorpayOrderId: razorOrder.id,
                 payment: false
@@ -82,6 +80,7 @@ export const placeOrder = async (req, res) => {
             paymentMethod,
             deliveryAddress,
             totalAmount,
+            tip,
             shopOrders
         })
 
@@ -120,7 +119,7 @@ export const placeOrder = async (req, res) => {
 export const verifyPayment = async (req, res) => {
     try {
         const { razorpay_payment_id, orderId } = req.body
-        const payment = await instance.payments.fetch(razorpay_payment_id)
+        const payment = await getInstance().payments.fetch(razorpay_payment_id)
         if (!payment || payment.status != "captured") {
             return res.status(400).json({ message: "payment not captured" })
         }
@@ -178,6 +177,25 @@ export const getMyOrders = async (req, res) => {
                 .populate("shopOrders.shopOrderItems.item", "name image price")
 
             return res.status(200).json(orders)
+        } else if (user.role == "deliveryBoy") {
+            const orders = await Order.find({ "shopOrders.assignedDeliveryBoy": req.userId })
+                .sort({ createdAt: -1 })
+                .populate("shopOrders.shop", "name")
+                .populate("shopOrders.shopOrderItems.item", "name image price")
+                .populate("user", "fullName email mobile")
+
+            const filteredOrders = orders.map(order => ({
+                _id: order._id,
+                user: order.user,
+                shopOrders: order.shopOrders.find(o => String(o.assignedDeliveryBoy) == req.userId),
+                createdAt: order.createdAt,
+                deliveryAddress: order.deliveryAddress,
+                payment: order.payment,
+                paymentMethod: order.paymentMethod,
+                tip: order.tip || 0
+            }))
+
+            return res.status(200).json(filteredOrders)
         } else if (user.role == "owner") {
             const orders = await Order.find({ "shopOrders.owner": req.userId })
                 .sort({ createdAt: -1 })
@@ -192,7 +210,7 @@ export const getMyOrders = async (req, res) => {
                 _id: order._id,
                 paymentMethod: order.paymentMethod,
                 user: order.user,
-                shopOrders: order.shopOrders.find(o => o.owner._id == req.userId),
+                shopOrders: order.shopOrders.find(o => String(o.owner) == req.userId),
                 createdAt: order.createdAt,
                 deliveryAddress: order.deliveryAddress,
                 payment: order.payment
@@ -220,7 +238,15 @@ export const updateOrderStatus = async (req, res) => {
         }
         shopOrder.status = status
         let deliveryBoysPayload = []
-        if (status == "out of delivery" && !shopOrder.assignment) {
+        const existingAssignment = shopOrder.assignment
+            ? await DeliveryAssignment.findById(shopOrder.assignment)
+            : null
+        const canRebroadcast = !existingAssignment || (!existingAssignment.assignedTo && existingAssignment.status === "brodcasted")
+        if (status == "out of delivery" && canRebroadcast) {
+            if (existingAssignment) {
+                await DeliveryAssignment.deleteOne({ _id: existingAssignment._id })
+                shopOrder.assignment = null
+            }
             const { longitude, latitude } = order.deliveryAddress
             const nearByDeliveryBoys = await User.find({
                 role: "deliveryBoy",
@@ -419,6 +445,7 @@ export const getCurrentOrder = async (req, res) => {
             })
 
         if (!assignment) {
+            console.log(`[getCurrentOrder] No assigned assignment for deliveryBoy: ${req.userId}`)
             return res.status(400).json({ message: "assignment not found" })
         }
         if (!assignment.order) {
@@ -426,6 +453,7 @@ export const getCurrentOrder = async (req, res) => {
         }
 
         const shopOrder = assignment.order.shopOrders.find(so => String(so._id) == String(assignment.shopOrderId))
+        console.log(`[getCurrentOrder] assignment found: ${assignment._id}, shopOrder: ${shopOrder?._id}`)
 
         if (!shopOrder) {
             return res.status(400).json({ message: "shopOrder not found" })
@@ -454,7 +482,7 @@ export const getCurrentOrder = async (req, res) => {
 
 
     } catch (error) {
-
+        return res.status(500).json({ message: `get current order error ${error}` })
     }
 }
 
@@ -498,7 +526,14 @@ export const sendDeliveryOtp = async (req, res) => {
         shopOrder.deliveryOtp = otp
         shopOrder.otpExpires = Date.now() + 5 * 60 * 1000
         await order.save()
-        await sendDeliveryOtpMail(order.user, otp)
+        console.log(`[DEV] Delivery OTP for order ${orderId}: ${otp}`)
+        console.log(`[DEV] Sending to user: ${order.user?.email} | name: ${order.user?.fullName}`)
+        try {
+            await sendDeliveryOtpMail(order.user, otp)
+            console.log(`[DEV] Email sent successfully to ${order.user?.email}`)
+        } catch (mailErr) {
+            console.log(`[Mail Error] ${mailErr.message}`)
+        }
         return res.status(200).json({ message: `Otp sent Successfuly to ${order?.user?.fullName}` })
     } catch (error) {
         return res.status(500).json({ message: `delivery otp error ${error}` })
@@ -513,7 +548,7 @@ export const verifyDeliveryOtp = async (req, res) => {
         if (!order || !shopOrder) {
             return res.status(400).json({ message: "enter valid order/shopOrderid" })
         }
-        if (shopOrder.deliveryOtp !== otp || !shopOrder.otpExpires || shopOrder.otpExpires < Date.now()) {
+        if (shopOrder.deliveryOtp !== otp.trim() || !shopOrder.otpExpires || shopOrder.otpExpires < Date.now()) {
             return res.status(400).json({ message: "Invalid/Expired Otp" })
         }
 
@@ -530,6 +565,55 @@ export const verifyDeliveryOtp = async (req, res) => {
 
     } catch (error) {
         return res.status(500).json({ message: `verify delivery otp error ${error}` })
+    }
+}
+
+export const getEarningStats=async (req,res) => {
+    try {
+        const deliveryBoyId=req.userId
+        const ratePerDelivery=50
+
+        const now=new Date()
+
+        const startOfDay=new Date(now)
+        startOfDay.setHours(0,0,0,0)
+
+        const startOfMonth=new Date(now.getFullYear(),now.getMonth(),1)
+
+        const allOrders=await Order.find({
+            "shopOrders.assignedDeliveryBoy":deliveryBoyId,
+            "shopOrders.status":"delivered"
+        }).lean()
+
+        let todayCount=0, todayTips=0
+        let monthCount=0, monthTips=0
+        let totalCount=0, totalTips=0
+
+        allOrders.forEach(order=>{
+            order.shopOrders.forEach(so=>{
+                if(String(so.assignedDeliveryBoy)==deliveryBoyId && so.status=="delivered" && so.deliveredAt){
+                    const deliveredAt=new Date(so.deliveredAt)
+                    totalCount++
+                    totalTips+=(order.tip||0)
+                    if(deliveredAt>=startOfMonth){
+                        monthCount++
+                        monthTips+=(order.tip||0)
+                    }
+                    if(deliveredAt>=startOfDay){
+                        todayCount++
+                        todayTips+=(order.tip||0)
+                    }
+                }
+            })
+        })
+
+        return res.status(200).json({
+            today:{ count:todayCount, earning:todayCount*ratePerDelivery+todayTips },
+            month:{ count:monthCount, earning:monthCount*ratePerDelivery+monthTips },
+            total:{ count:totalCount, earning:totalCount*ratePerDelivery+totalTips }
+        })
+    } catch (error) {
+        return res.status(500).json({message:`earning stats error ${error}`})
     }
 }
 
@@ -563,12 +647,27 @@ let stats={}
 
 todaysDeliveries.forEach(shopOrder=>{
     const hour=new Date(shopOrder.deliveredAt).getHours()
-    stats[hour]=(stats[hour] || 0) + 1
+    if(!stats[hour]) stats[hour]={ count:0, tips:0 }
+    stats[hour].count += 1
+})
+
+orders.forEach(order=>{
+    order.shopOrders.forEach(shopOrder=>{
+        if(shopOrder.assignedDeliveryBoy==deliveryBoyId &&
+            shopOrder.status=="delivered" &&
+            shopOrder.deliveredAt &&
+            shopOrder.deliveredAt>=startsOfDay
+        ){
+            const hour=new Date(shopOrder.deliveredAt).getHours()
+            if(stats[hour]) stats[hour].tips += (order.tip || 0)
+        }
+    })
 })
 
 let formattedStats=Object.keys(stats).map(hour=>({
  hour:parseInt(hour),
- count:stats[hour]   
+ count:stats[hour].count,
+ tips:stats[hour].tips
 }))
 
 formattedStats.sort((a,b)=>a.hour-b.hour)

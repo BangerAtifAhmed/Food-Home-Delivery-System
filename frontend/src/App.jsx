@@ -27,7 +27,7 @@ import { setSocket } from './redux/userSlice'
 
 export const serverUrl="http://localhost:8000"
 function App() {
-    const {userData}=useSelector(state=>state.user)
+    const {userData,socket}=useSelector(state=>state.user)
     const dispatch=useDispatch()
   useGetCurrentUser()
 useUpdateLocation()
@@ -38,17 +38,24 @@ useUpdateLocation()
   useGetMyOrders()
 
   useEffect(()=>{
-const socketInstance=io(serverUrl,{withCredentials:true})
-dispatch(setSocket(socketInstance))
-socketInstance.on('connect',()=>{
-if(userData){
-  socketInstance.emit('identity',{userId:userData._id})
-}
-})
-return ()=>{
-  socketInstance.disconnect()
-}
-  },[userData?._id])
+    const socketInstance=io(serverUrl,{withCredentials:true})
+    dispatch(setSocket(socketInstance))
+    return ()=>{
+      socketInstance.disconnect()
+    }
+  },[])
+
+  useEffect(()=>{
+    if(!socket) return
+    const handleConnect=()=>{
+      if(userData) socket.emit('identity',{userId:userData._id})
+    }
+    socket.on('connect',handleConnect)
+    if(socket.connected && userData) socket.emit('identity',{userId:userData._id})
+    return ()=>{
+      socket.off('connect',handleConnect)
+    }
+  },[socket,userData?._id])
 
   return (
    <Routes>

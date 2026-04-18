@@ -28,11 +28,12 @@ function CheckOut() {
     const { cartItems ,totalAmount,userData} = useSelector(state => state.user)
   const [addressInput, setAddressInput] = useState("")
   const [paymentMethod, setPaymentMethod] = useState("cod")
+  const [tip, setTip] = useState(0)
   const navigate=useNavigate()
   const dispatch = useDispatch()
   const apiKey = import.meta.env.VITE_GEOAPIKEY
   const deliveryFee=totalAmount>500?0:40
-  const AmountWithDeliveryFee=totalAmount+deliveryFee
+  const AmountWithDeliveryFee=totalAmount+deliveryFee+tip
 
 
 
@@ -83,7 +84,8 @@ function CheckOut() {
           longitude:location.lon
         },
         totalAmount:AmountWithDeliveryFee,
-        cartItems
+        cartItems,
+        tip
       },{withCredentials:true})
 
       if(paymentMethod=="cod"){
@@ -106,9 +108,15 @@ const openRazorpayWindow=(orderId,razorOrder)=>{
  key:import.meta.env.VITE_RAZORPAY_KEY_ID,
  amount:razorOrder.amount,
  currency:'INR',
- name:"Vingo",
+ name:"HomeChef",
  description:"Food Delivery Website",
  order_id:razorOrder.id,
+ prefill:{
+   contact:userData.mobile,
+   email:userData.email,
+   method:"upi",
+   vpa:"success@razorpay"
+ },
  handler:async function (response) {
   try {
     const result=await axios.post(`${serverUrl}/api/order/verify-payment`,{
@@ -219,9 +227,23 @@ const openRazorpayWindow=(orderId,razorOrder)=>{
   <span>Delivery Fee</span>
   <span>{deliveryFee==0?"Free":deliveryFee}</span>
 </div>
+<div className='flex flex-col gap-2'>
+  <span className='text-sm font-medium text-gray-700'>Tip for Delivery Boy</span>
+  <div className='flex gap-2 flex-wrap'>
+    {[0,10,20,50].map(amount=>(
+      <button key={amount} onClick={()=>setTip(amount)} className={`px-4 py-1 rounded-full text-sm border font-medium transition ${tip===amount?'bg-[#ff4d2d] text-white border-[#ff4d2d]':'border-gray-300 text-gray-600 hover:border-[#ff4d2d]'}`}>
+        {amount===0?"No Tip":`₹${amount}`}
+      </button>
+    ))}
+  </div>
+</div>
+{tip>0 && <div className='flex justify-between text-gray-700'>
+  <span>Tip</span>
+  <span>₹{tip}</span>
+</div>}
 <div className='flex justify-between text-lg font-bold text-[#ff4d2d] pt-2'>
     <span>Total</span>
-  <span>{AmountWithDeliveryFee}</span>
+  <span>₹{AmountWithDeliveryFee}</span>
 </div>
 </div>
         </section>

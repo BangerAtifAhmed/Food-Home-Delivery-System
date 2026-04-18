@@ -17,8 +17,8 @@ function useGetShopByCity() {
         console.log(error)
     }
 }
-fetchShops()
- 
+if(currentCity) fetchShops()
+
   },[currentCity])
 }
 

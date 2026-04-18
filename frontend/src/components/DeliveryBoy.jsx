@@ -16,6 +16,7 @@ function DeliveryBoy() {
   const [availableAssignments,setAvailableAssignments]=useState(null)
   const [otp,setOtp]=useState("")
   const [todayDeliveries,setTodayDeliveries]=useState([])
+const [earningStats,setEarningStats]=useState(null)
 const [deliveryBoyLocation,setDeliveryBoyLocation]=useState(null)
 const [loading,setLoading]=useState(false)
 const [message,setMessage]=useState("")
@@ -23,7 +24,8 @@ const [message,setMessage]=useState("")
 if(!socket || userData.role!=="deliveryBoy") return
 let watchId
 if(navigator.geolocation){
-watchId=navigator.geolocation.watchPosition((position)=>{
+watchId=navigator.geolocation.watchPosition(
+  (position)=>{
     const latitude=position.coords.latitude
     const longitude=position.coords.longitude
     setDeliveryBoyLocation({lat:latitude,lon:longitude})
@@ -32,13 +34,10 @@ watchId=navigator.geolocation.watchPosition((position)=>{
       longitude,
       userId:userData._id
     })
-  }),
-  (error)=>{
-    console.log(error)
   },
-  {
-    enableHighAccuracy:true
-  }
+  (error)=>{ console.log(error) },
+  { enableHighAccuracy:true }
+)
 }
 
 return ()=>{
@@ -49,7 +48,7 @@ return ()=>{
 
 
 const ratePerDelivery=50
-const totalEarning=todayDeliveries.reduce((sum,d)=>sum + d.count*ratePerDelivery,0)
+const totalEarning=todayDeliveries.reduce((sum,d)=>sum + d.count*ratePerDelivery + (d.tips||0),0)
 
 
 
@@ -66,26 +65,29 @@ const totalEarning=todayDeliveries.reduce((sum,d)=>sum + d.count*ratePerDelivery
   const getCurrentOrder=async () => {
      try {
       const result=await axios.get(`${serverUrl}/api/order/get-current-order`,{withCredentials:true})
-    setCurrentOrder(result.data)
+      setCurrentOrder(result.data)
     } catch (error) {
-      console.log(error)
+      if(error?.response?.status!==400) console.log(error)
     }
   }
 
 
   const acceptOrder=async (assignmentId) => {
     try {
-      const result=await axios.get(`${serverUrl}/api/order/accept-order/${assignmentId}`,{withCredentials:true})
-    console.log(result.data)
-    await getCurrentOrder()
+      await axios.get(`${serverUrl}/api/order/accept-order/${assignmentId}`,{withCredentials:true})
+      await getCurrentOrder()
+      setAvailableAssignments([])
     } catch (error) {
-      console.log(error)
+      const msg=error.response?.data?.message||"Failed to accept order"
+      setMessage(msg)
+      setAvailableAssignments(prev=>prev?.filter(a=>a.assignmentId!==assignmentId)||[])
     }
   }
 
   useEffect(()=>{
+    if(!socket) return
     socket.on('newAssignment',(data)=>{
-      setAvailableAssignments(prev=>([...prev,data]))
+      setAvailableAssignments(prev=>(prev?[...prev,data]:[data]))
     })
     return ()=>{
       socket.off('newAssignment')
@@ -94,15 +96,15 @@ const totalEarning=todayDeliveries.reduce((sum,d)=>sum + d.count*ratePerDelivery
   
   const sendOtp=async () => {
     setLoading(true)
+    setMessage("")
     try {
       const result=await axios.post(`${serverUrl}/api/order/send-delivery-otp`,{
         orderId:currentOrder._id,shopOrderId:currentOrder.shopOrder._id
       },{withCredentials:true})
       setLoading(false)
-       setShowOtpBox(true)
-    console.log(result.data)
+      setShowOtpBox(true)
     } catch (error) {
-      console.log(error)
+      setMessage(error.response?.data?.message || "Failed to send OTP. Check email config.")
       setLoading(false)
     }
   }
@@ -110,23 +112,29 @@ const totalEarning=todayDeliveries.reduce((sum,d)=>sum + d.count*ratePerDelivery
     setMessage("")
     try {
       const result=await axios.post(`${serverUrl}/api/order/verify-delivery-otp`,{
-        orderId:currentOrder._id,shopOrderId:currentOrder.shopOrder._id,otp
+        orderId:currentOrder._id,shopOrderId:currentOrder.shopOrder._id,otp:otp.trim()
       },{withCredentials:true})
-    console.log(result.data)
     setMessage(result.data.message)
     location.reload()
     } catch (error) {
-      console.log(error)
+      setMessage(error.response?.data?.message || "OTP verification failed")
     }
   }
 
 
    const handleTodayDeliveries=async () => {
-    
     try {
       const result=await axios.get(`${serverUrl}/api/order/get-today-deliveries`,{withCredentials:true})
-    console.log(result.data)
-   setTodayDeliveries(result.data)
+      setTodayDeliveries(result.data)
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  const fetchEarningStats=async () => {
+    try {
+      const result=await axios.get(`${serverUrl}/api/order/get-earning-stats`,{withCredentials:true})
+      setEarningStats(result.data)
     } catch (error) {
       console.log(error)
     }
@@ -137,6 +145,7 @@ const totalEarning=todayDeliveries.reduce((sum,d)=>sum + d.count*ratePerDelivery
 getAssignments()
 getCurrentOrder()
 handleTodayDeliveries()
+fetchEarningStats()
   },[userData])
   return (
     <div className='w-screen min-h-screen flex flex-col gap-5 items-center bg-[#fff9f6] overflow-y-auto'>
@@ -160,15 +169,29 @@ handleTodayDeliveries()
    </BarChart>
   </ResponsiveContainer>
 
-  <div className='max-w-sm mx-auto mt-6 p-6 bg-white rounded-2xl shadow-lg text-center'>
-<h1 className='text-xl font-semibold text-gray-800 mb-2'>Today's Earning</h1>
-<span className='text-3xl font-bold text-green-600'>₹{totalEarning}</span>
+  <div className='grid grid-cols-3 gap-3 mt-6'>
+    <div className='p-4 bg-white rounded-2xl shadow-lg text-center border border-orange-100'>
+      <p className='text-xs text-gray-500 mb-1'>Today</p>
+      <p className='text-xl font-bold text-green-600'>₹{earningStats?.today.earning??totalEarning}</p>
+      <p className='text-xs text-gray-400'>{earningStats?.today.count??0} orders</p>
+    </div>
+    <div className='p-4 bg-white rounded-2xl shadow-lg text-center border border-orange-100'>
+      <p className='text-xs text-gray-500 mb-1'>This Month</p>
+      <p className='text-xl font-bold text-blue-600'>₹{earningStats?.month.earning??0}</p>
+      <p className='text-xs text-gray-400'>{earningStats?.month.count??0} orders</p>
+    </div>
+    <div className='p-4 bg-white rounded-2xl shadow-lg text-center border border-orange-100'>
+      <p className='text-xs text-gray-500 mb-1'>Total</p>
+      <p className='text-xl font-bold text-[#ff4d2d]'>₹{earningStats?.total.earning??0}</p>
+      <p className='text-xs text-gray-400'>{earningStats?.total.count??0} orders</p>
+    </div>
   </div>
 </div>
 
 
 {!currentOrder && <div className='bg-white rounded-2xl p-5 shadow-md w-[90%] border border-orange-100'>
 <h1 className='text-lg font-bold mb-4 flex items-center gap-2'>Available Orders</h1>
+{message && <p className='text-red-500 text-sm mb-3'>{message}</p>}
 
 <div className='space-y-4'>
 {availableAssignments?.length>0
@@ -206,12 +229,13 @@ availableAssignments.map((a,index)=>(
         lat: currentOrder.deliveryAddress.latitude,
         lon: currentOrder.deliveryAddress.longitude
       }}} />
-{!showOtpBox ? <button className='mt-4 w-full bg-green-500 text-white font-semibold py-2 px-4 rounded-xl shadow-md hover:bg-green-600 active:scale-95 transition-all duration-200' onClick={sendOtp} disabled={loading}>
+{!showOtpBox ? <><button className='mt-4 w-full bg-green-500 text-white font-semibold py-2 px-4 rounded-xl shadow-md hover:bg-green-600 active:scale-95 transition-all duration-200' onClick={sendOtp} disabled={loading}>
 {loading?<ClipLoader size={20} color='white'/> :"Mark As Delivered"}
- </button>:<div className='mt-4 p-4 border rounded-xl bg-gray-50'>
-<p className='text-sm font-semibold mb-2'>Enter Otp send to <span className='text-orange-500'>{currentOrder.user.fullName}</span></p>
+ </button>{message && <p className='text-center text-red-500 text-sm mt-2'>{message}</p>}</> :<div className='mt-4 p-4 border rounded-xl bg-gray-50'>
+<p className='text-sm font-semibold mb-2'>OTP sent to <span className='text-orange-500'>{currentOrder.user.fullName}</span></p>
+<p className='text-xs text-gray-500 mb-2'>Email: {currentOrder.user.email}</p>
 <input type="text" className='w-full border px-3 py-2 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-orange-400' placeholder='Enter OTP' onChange={(e)=>setOtp(e.target.value)} value={otp}/>
-{message && <p className='text-center text-green-400 text-2xl mb-4'>{message}</p>}
+{message && <p className={`text-center text-sm mb-4 ${message.toLowerCase().includes('success')?'text-green-500':'text-red-500'}`}>{message}</p>}
 
 <button className="w-full bg-orange-500 text-white py-2 rounded-lg font-semibold hover:bg-orange-600 transition-all" onClick={verifyOtp}>Submit OTP</button>
   </div>}

@@ -48,19 +48,19 @@ function UserOrderCard({ data }) {
             </div>
 
             {data.shopOrders.map((shopOrder, index) => (
-                <div className='"border rounded-lg p-3 bg-[#fffaf7] space-y-3' key={index}>
+                <div className='border rounded-lg p-3 bg-[#fffaf7] space-y-3' key={index}>
                     <p>{shopOrder.shop.name}</p>
 
                     <div className='flex space-x-4 overflow-x-auto pb-2'>
                         {shopOrder.shopOrderItems.map((item, index) => (
-                            <div key={index} className='flex-shrink-0 w-40 border rounded-lg p-2 bg-white"'>
+                            <div key={index} className='flex-shrink-0 w-40 border rounded-lg p-2 bg-white'>
                                 <img src={item.item.image} alt="" className='w-full h-24 object-cover rounded' />
                                 <p className='text-sm font-semibold mt-1'>{item.name}</p>
                                 <p className='text-xs text-gray-500'>Qty: {item.quantity} x ₹{item.price}</p>
 
                                 {shopOrder.status == "delivered" && <div className='flex space-x-1 mt-2'>
                                     {[1, 2, 3, 4, 5].map((star) => (
-                                        <button className={`text-lg ${selectedRating[item.item._id] >= star ? 'text-yellow-400' : 'text-gray-400'}`} onClick={() => handleRating(item.item._id,star)}>★</button>
+                                        <button key={star} className={`text-lg ${selectedRating[item.item._id] >= star ? 'text-yellow-400' : 'text-gray-400'}`} onClick={() => handleRating(item.item._id,star)}>★</button>
                                     ))}
                                 </div>}
 

@@ -23,12 +23,14 @@ function TrackOrderPage() {
     }
 
     useEffect(()=>{
+if(!socket) return
 socket.on('updateDeliveryLocation',({deliveryBoyId,latitude,longitude})=>{
 setLiveLocations(prev=>({
   ...prev,
   [deliveryBoyId]:{lat:latitude,lon:longitude}
 }))
 })
+return ()=>{ socket.off('updateDeliveryLocation') }
     },[socket])
 
     useEffect(() => {

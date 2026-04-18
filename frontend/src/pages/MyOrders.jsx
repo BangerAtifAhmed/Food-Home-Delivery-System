@@ -4,6 +4,7 @@ import { IoIosArrowRoundBack } from "react-icons/io";
 import { useNavigate } from 'react-router-dom';
 import UserOrderCard from '../components/UserOrderCard';
 import OwnerOrderCard from '../components/OwnerOrderCard';
+import DeliveryBoyOrderCard from '../components/DeliveryBoyOrderCard';
 import { setMyOrders, updateOrderStatus, updateRealtimeOrderStatus } from '../redux/userSlice';
 
 
@@ -14,7 +15,7 @@ const dispatch=useDispatch()
   useEffect(()=>{
 socket?.on('newOrder',(data)=>{
 if(data.shopOrders?.owner._id==userData._id){
-dispatch(setMyOrders([data,...myOrders]))
+dispatch(setMyOrders([data,...(myOrders||[])]))
 }
 })
 
@@ -52,6 +53,10 @@ return ()=>{
             :
             userData.role=="owner"? (
               <OwnerOrderCard data={order} key={index}/>
+            )
+            :
+            userData.role=="deliveryBoy"? (
+              <DeliveryBoyOrderCard data={order} key={index}/>
             )
             :
             null

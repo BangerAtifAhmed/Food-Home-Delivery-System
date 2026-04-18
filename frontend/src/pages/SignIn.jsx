@@ -24,6 +24,7 @@ function SignIn() {
     const [loading,setLoading]=useState(false)
     const [mobile,setMobile]=useState("")
     const [showMobile,setShowMobile]=useState(false)
+    const [role,setRole]=useState("user")
     const dispatch=useDispatch()
      const handleSignIn=async () => {
         setLoading(true)
@@ -47,10 +48,11 @@ function SignIn() {
              email:result.user.email,
              fullName:result.user.displayName,
              mobile:mobile||undefined,
+             role
          },{withCredentials:true})
          dispatch(setUserData(data))
        } catch (error) {
-         console.log(error)
+         setErr(error?.response?.data?.message || "Google sign in failed")
        }
           }
     return (
@@ -89,9 +91,19 @@ function SignIn() {
             </button>
       {err && <p className='text-red-500 text-center my-[10px]'>*{err}</p>}
 
-            {showMobile && <div className='mt-4 mb-2'>
+            {showMobile && <div className='mt-4 mb-2 space-y-3'>
+                <div>
                 <label className='block text-gray-700 font-medium mb-1'>Mobile (for new accounts)</label>
                 <input type="text" className='w-full border rounded-lg px-3 py-2 focus:outline-none' placeholder='Enter your Mobile Number' style={{ border: `1px solid ${borderColor}` }} onChange={(e)=>setMobile(e.target.value)} value={mobile}/>
+                </div>
+                <div>
+                <label className='block text-gray-700 font-medium mb-1'>Role (for new accounts)</label>
+                <div className='flex gap-2'>
+                    {["user","owner","deliveryBoy"].map(r=>(
+                        <button key={r} onClick={()=>setRole(r)} className='flex-1 border rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors cursor-pointer' style={role===r?{backgroundColor:primaryColor,color:"white"}:{border:`1px solid ${primaryColor}`,color:primaryColor}}>{r}</button>
+                    ))}
+                </div>
+                </div>
             </div>}
             <button className='w-full mt-4 flex items-center justify-center gap-2 border rounded-lg px-4 py-2 transition cursor-pointer duration-200 border-gray-400 hover:bg-gray-100' onClick={()=>{ if(!showMobile){setShowMobile(true)}else{handleGoogleAuth()} }}>
 <FcGoogle size={20}/>
